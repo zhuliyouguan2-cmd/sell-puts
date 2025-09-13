@@ -98,7 +98,7 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     r = 0.04 
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
     abs_delta = abs(delta)
-    score_delta = linear_scale(abs_delta, worst=0.35, best=0.10) # Lower is better
+    score_delta = linear_scale(abs_delta, worst=0.45, best=0.10) # Lower is better
     margin_of_safety = (current_price - strike) / current_price
     score_mos = linear_scale(margin_of_safety, worst=0.05, best=0.20)
     score_prob_safety = (score_delta + score_mos) / 2
@@ -112,7 +112,7 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     # 4. Risk Management (10% Weight)
     capital_at_risk_total = (strike * 100) - (premium * 100)
     risk_as_pct_portfolio = (capital_at_risk_total / portfolio_value) * 100 if portfolio_value > 0 else float('inf')
-    score_sizing = linear_scale(risk_as_pct_portfolio, worst=8.0, best=1.0) # Lower is better
+    score_sizing = linear_scale(risk_as_pct_portfolio, worst=10.0, best=1.0) # Lower is better
 
     # Final Score Calculation
     final_score = ((score_return_on_capital * 0.35) + \
@@ -157,4 +157,14 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
     if not all_options:
         return pd.DataFrame()
 
-    return pd.DataFrame(all_options).sort_values(by='Score', ascending=False).reset_index(drop=True)
+    df = pd.DataFrame(all_options)
+    
+    # Define the desired column order with Ticker first
+    column_order = [
+        'Ticker', 'Expiration', 'Strike', 'Premium', 'Score', 'Ann. Return', 
+        'Margin of Safety', 'DTE', 'IV', 'Delta', 'Sector'
+    ]
+    # Reorder the DataFrame, handling potential missing columns gracefully
+    df = df.reindex(columns=column_order)
+
+    return df.sort_values(by='Score', ascending=False).reset_index(drop=True)
