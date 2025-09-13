@@ -25,15 +25,13 @@ def get_stock_data_and_technicals(ticker):
         expirations = stock.options
 
         # --- Calculate Technical Indicators ---
-        # RSI (Relative Strength Index)
-        delta = hist['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        delta_hist = hist['Close'].diff()
+        gain = (delta_hist.where(delta_hist > 0, 0)).rolling(window=14).mean()
+        loss = (-delta_hist.where(delta_hist < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
-        current_rsi = rsi.iloc[-1] if pd.notna(rsi.iloc[-1]) else 50 # Default to neutral if NaN
+        current_rsi = rsi.iloc[-1] if pd.notna(rsi.iloc[-1]) else 50
 
-        # SMAs (Simple Moving Averages)
         sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
         sma_200 = hist['Close'].rolling(window=200).mean().iloc[-1]
 
@@ -62,9 +60,21 @@ def black_scholes_put_delta(S, K, T, r, sigma):
     delta = norm.cdf(d1) - 1
     return delta
 
+def linear_scale(value, worst, best):
+    """Linearly scales a value from a 'worst' to 'best' range to a 0-5 score."""
+    # If the best value is lower than the worst, reverse the logic (lower is better)
+    if best < worst:
+        worst, best = best, worst
+        value = max(worst, min(best, value)) # Clamp
+        score = 5 * (best - value) / (best - worst)
+    else:
+        value = max(worst, min(best, value)) # Clamp
+        score = 5 * (value - worst) / (best - worst)
+    return score
+
 # --- Scoring Logic ---
 def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sma_200):
-    """Scores a single put option based on the defined strategy."""
+    """Scores a single put option using continuous linear functions."""
     strike = option['strike']
     premium = option['lastPrice']
     iv = option['impliedVolatility']
@@ -73,21 +83,14 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     if dte <= 0 or premium <= 0 or strike <= 0:
         return None
 
-    # Filter out any options with less than 8% annualized return
     capital_at_risk_per_share = strike - premium
     annualized_return = (premium / capital_at_risk_per_share) * (365 / dte) if capital_at_risk_per_share > 0 else 0
     if annualized_return < 0.08:
         return None
 
     # 1. Return on Capital (35% Weight)
-    if annualized_return > 0.20: score_ar = 5
-    elif annualized_return >= 0.15: score_ar = 3
-    elif annualized_return >= 0.10: score_ar = 1
-    else: score_ar = 0
-    if iv > 0.50: score_iv = 5
-    elif iv >= 0.30: score_iv = 3
-    elif iv >= 0.15: score_iv = 1
-    else: score_iv = 0
+    score_ar = linear_scale(annualized_return, worst=0.08, best=0.25)
+    score_iv = linear_scale(iv, worst=0.15, best=0.60)
     score_return_on_capital = (score_ar + score_iv) / 2
 
     # 2. Probability & Safety (35% Weight)
@@ -95,38 +98,23 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     r = 0.04 
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
     abs_delta = abs(delta)
-    if abs_delta < 0.15: score_delta = 5
-    elif abs_delta <= 0.25: score_delta = 3
-    elif abs_delta <= 0.35: score_delta = 1
-    else: score_delta = 0
+    score_delta = linear_scale(abs_delta, worst=0.35, best=0.10) # Lower is better
     margin_of_safety = (current_price - strike) / current_price
-    if margin_of_safety > 0.15: score_mos = 5
-    elif margin_of_safety >= 0.10: score_mos = 3
-    elif margin_of_safety >= 0.05: score_mos = 1
-    else: score_mos = 0
+    score_mos = linear_scale(margin_of_safety, worst=0.05, best=0.20)
     score_prob_safety = (score_delta + score_mos) / 2
 
     # 3. Basic Technical Indicators (20% Weight)
-    if rsi < 35: score_rsi = 5 # Oversold, good for reversal
-    elif rsi < 45: score_rsi = 3
-    elif rsi < 60: score_rsi = 1
-    else: score_rsi = 0 # Overbought, risky
-    
-    if current_price > sma_200 * 1.03: score_sma = 5 # Strong uptrend
-    elif current_price > sma_200: score_sma = 3 # Uptrend
-    elif current_price > sma_50: score_sma = 1
-    else: score_sma = 0 # Potential downtrend
+    score_rsi = linear_scale(rsi, worst=65, best=35) # Lower is better
+    price_vs_sma_pct = (current_price - sma_200) / sma_200
+    score_sma = linear_scale(price_vs_sma_pct, worst=0.0, best=0.15) # Higher % above SMA is better
     score_technicals = (score_rsi + score_sma) / 2
 
     # 4. Risk Management (10% Weight)
     capital_at_risk_total = (strike * 100) - (premium * 100)
     risk_as_pct_portfolio = (capital_at_risk_total / portfolio_value) * 100 if portfolio_value > 0 else float('inf')
-    if risk_as_pct_portfolio < 4: score_sizing = 5
-    elif risk_as_pct_portfolio <= 6: score_sizing = 3
-    elif risk_as_pct_portfolio <= 8: score_sizing = 1
-    else: score_sizing = 0
+    score_sizing = linear_scale(risk_as_pct_portfolio, worst=8.0, best=1.0) # Lower is better
 
-    # Final Score Calculation with new weights
+    # Final Score Calculation
     final_score = ((score_return_on_capital * 0.35) + \
                    (score_prob_safety * 0.35) + \
                    (score_technicals * 0.20) + \
