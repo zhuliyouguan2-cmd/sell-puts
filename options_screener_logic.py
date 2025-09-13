@@ -7,7 +7,7 @@ from scipy.stats import norm
 
 # --- Configuration ---
 # This is your pre-approved list of liquid stocks and ETFs.
-TRADING_UNIVERSE = ['SPY', 'QQQ', 'IWM', 'DIA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA']
+TRADING_UNIVERSE = ['SPY', 'QQQ', 'UNH', 'AAPL', 'GOOG', 'NVDA']
 
 # --- Live Data Functions (Using yfinance) ---
 
