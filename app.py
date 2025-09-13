@@ -22,18 +22,22 @@ st.markdown("Find attractive put-selling opportunities based on your pre-vetted 
 # --- Scoring Logic Expander ---
 with st.expander("How are these options scored?"):
     st.markdown("""
-    The final score (out of 100) is a weighted average of three key areas designed to balance profit with risk:
+    The final score (out of 100) is a weighted average of four key areas:
 
-    **1. Return on Capital (40% Weight)**
-    - **Annualized Return:** Measures the theoretical return if you held the position for a year. Higher is better.
-    - **Implied Volatility (IV):** Higher IV means higher premiums (and higher risk). The score rewards a healthy level of IV without being excessively risky.
+    **1. Return on Capital (35% Weight)**
+    - **Annualized Return:** The theoretical return if you held the position for a year.
+    - **Implied Volatility (IV):** Rewards a healthy level of IV for higher premiums.
 
-    **2. Probability & Safety (40% Weight)**
-    - **Delta:** An estimate of the probability of the option expiring in-the-money. A lower delta is safer and scores higher.
-    - **Margin of Safety:** The percentage the stock price is *above* the strike price. A larger buffer is safer and scores higher.
+    **2. Probability & Safety (35% Weight)**
+    - **Delta:** A lower delta (lower probability of expiring in-the-money) is safer and scores higher.
+    - **Margin of Safety:** The percentage the stock price is *above* the strike price. A larger buffer is safer.
 
-    **3. Risk Management (20% Weight)**
-    - **Position Sizing:** Calculates the total capital at risk for one contract as a percentage of your portfolio. Smaller positions are safer and score higher.
+    **3. Basic Technicals (20% Weight)**
+    - **Relative Strength Index (RSI):** Favors stocks that are not in "overbought" territory.
+    - **Simple Moving Average (SMA):** Rewards stocks trading above their 50-day and 200-day moving averages, indicating a healthy uptrend.
+
+    **4. Risk Management (10% Weight)**
+    - **Position Sizing:** Calculates the capital at risk as a percentage of your portfolio. Smaller positions are safer.
     
     _Note: Any option with less than an 8% annualized return is automatically filtered out._
     """)
@@ -44,16 +48,16 @@ st.sidebar.header("Your Portfolio & Strategy")
 # List of tickers
 tickers_input = st.sidebar.text_area(
     "Enter Tickers (comma-separated)", 
-    "NVDA, UNH, GOOG, AAPL, QQQ, SPY"
+    "NVDA, UNH, GOOG, AAPL, BRKB, TSM, QQQ, SPY"
 )
 
 # Portfolio value
 portfolio_value = st.sidebar.number_input(
     "Total Portfolio Value ($)", 
-    min_value=1000, 
-    max_value=10000000, 
-    value=100000, 
-    step=1000,
+    min_value=50000, 
+    max_value=1000000, 
+    value=200000, 
+    step=10000,
     help="Used to calculate position sizing score."
 )
 
@@ -61,14 +65,14 @@ st.sidebar.header("Options Filtering")
 # DTE range
 min_dte, max_dte = st.sidebar.slider(
     "Days to Expiration (DTE) Range", 
-    1, 90, (25, 50),
+    1, 90, (30, 45),
     help="What range of expiration dates are you interested in?"
 )
 
 # Number of strikes to show
 num_strikes_otm = st.sidebar.slider(
     "Number of OTM Strikes to Analyze", 
-    1, 25, 20,
+    1, 25, 18,
     help="How many out-of-the-money put strikes to fetch per expiration date."
 )
 
