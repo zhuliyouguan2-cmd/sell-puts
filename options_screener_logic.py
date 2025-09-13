@@ -7,7 +7,7 @@ from scipy.stats import norm
 
 # --- Configuration ---
 # This is your pre-approved list of liquid stocks and ETFs.
-TRADING_UNIVERSE = ['SPY', 'QQQ', 'UNH', 'AAPL', 'GOOG', 'NVDA']
+TRADING_UNIVERSE = ['SPY', 'QQQ', 'IWM', 'DIA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA']
 
 # --- Live Data Functions (Using yfinance) ---
 
@@ -270,20 +270,10 @@ def run_screener(universe):
         }
         results.append(final_result)
 
+    # The calling script will now handle displaying the results.
     if not results:
         print("\nNo trading opportunities found that meet all criteria.")
-    else:
-        results_df = pd.DataFrame(results)
-        # Reorder columns for better readability
-        cols_order = [
-            'symbol', 'vol_rank', 'tech_score', 'current_price', 'return_on_risk', 
-            'net_credit', 'max_risk', 'short_put_strike', 'long_put_strike', 
-            'short_put_delta', 'long_put_delta', 'spread_width'
-        ]
-        results_df = results_df[cols_order]
-        print("\n--- Potential Trading Opportunities Found ---")
-        print(results_df.to_string())
-
+        
     print("\nScreener run finished.")
     return results
 
