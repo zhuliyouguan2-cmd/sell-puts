@@ -9,9 +9,8 @@ from options_screener_logic import run_screener, TRADING_UNIVERSE
 # --- Streamlit Page Configuration ---
 st.set_page_config(
     page_title="Quantitative Put Selling Dashboard",
-    page_icon="📈",
+    page_icon="🏆",
     layout="wide",
-    initial_sidebar_state="collapsed"
 )
 
 # --- Caching ---
@@ -29,11 +28,11 @@ def get_cached_screener_results():
     return results, timestamp
 
 # --- Dashboard UI ---
-st.title("📈 Quantitative Put Selling Dashboard")
-st.markdown("This dashboard screens for high-probability bull put spreads based on a quantitative scoring model.")
+st.title("🏆 Quantitative Put Selling Dashboard")
+st.markdown("This dashboard screens for high-probability bull put spreads and ranks the best opportunities.")
 
 # --- Load Data and Display Timestamp ---
-results, last_run_timestamp = get_cached_screener_results()
+all_results, last_run_timestamp = get_cached_screener_results()
 
 col1, col2 = st.columns([4, 1])
 with col1:
@@ -43,32 +42,35 @@ with col2:
         st.cache_data.clear()
         st.rerun()
 
-# --- Display Key Metrics ---
-if results:
-    results_df = pd.DataFrame(results)
-    st.metric(label="High-Quality Opportunities Found", value=len(results_df))
-else:
-    results_df = pd.DataFrame() # Ensure df exists even if empty
-    st.metric(label="High-Quality Opportunities Found", value=0)
+# --- Process Data ---
+if not all_results:
+    st.error("The screener did not return any data. This might be a temporary API issue.")
+    st.stop()
 
-st.header("Trade Opportunities")
-st.markdown("The table below shows potential trades that have passed all quantitative filters. Review these options to select your trades.")
+all_results_df = pd.DataFrame(all_results)
+passing_df = all_results_df[all_results_df['status'] == 'PASS'].copy()
+if not passing_df.empty:
+    # Ensure 'return_on_risk' is numeric before sorting
+    passing_df['return_on_risk'] = pd.to_numeric(passing_df['return_on_risk'])
 
-if not results_df.empty:
-    # --- Format the DataFrame for better readability ---
-    formatted_df = results_df.copy()
 
-    # Apply formatting
-    formatted_df['current_price'] = formatted_df['current_price'].apply(lambda x: f"${x:,.2f}")
+# --- Display Top 5 Opportunities ---
+st.header("🥇 Top 5 Opportunities")
+st.markdown("These are the highest-ranked trades based on **Return on Risk** that passed all filters.")
+
+if not passing_df.empty:
+    top_5_df = passing_df.sort_values(by='return_on_risk', ascending=False).head(5)
+    
+    # Format the DataFrame for better readability
+    formatted_df = top_5_df.copy()
+    formatted_df['current_price'] = formatted_df['current_price'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "N/A")
     formatted_df['net_credit'] = formatted_df['net_credit'].apply(lambda x: f"${x:,.2f}")
     formatted_df['max_risk'] = formatted_df['max_risk'].apply(lambda x: f"${x:,.2f}")
     formatted_df['return_on_risk'] = formatted_df['return_on_risk'].apply(lambda x: f"{x:.2f}%")
     
-    # Define column order and configuration
     column_order = [
         'symbol', 'vol_rank', 'tech_score', 'current_price', 'return_on_risk', 'net_credit', 
-        'max_risk', 'short_put_strike', 'long_put_strike', 'short_put_delta', 
-        'long_put_delta', 'spread_width'
+        'max_risk', 'short_put_strike', 'long_put_strike'
     ]
     
     st.dataframe(
@@ -77,41 +79,44 @@ if not results_df.empty:
         hide_index=True,
         column_config={
             "symbol": st.column_config.TextColumn("Ticker"),
-            "vol_rank": st.column_config.TextColumn("Vol Rank", help="Historical Volatility Rank (Proxy for IV Rank). Higher is better."),
-            "tech_score": st.column_config.TextColumn("Tech Score", help="Technical health score (max 2)."),
-            "return_on_risk": st.column_config.TextColumn("Return %", help="The potential return on risk for the trade."),
+            "vol_rank": st.column_config.TextColumn("Vol Rank", help="Proxy for IV Rank. Higher is better."),
+            "tech_score": st.column_config.TextColumn("Tech Score"),
+            "current_price": st.column_config.TextColumn("Underlying Price"),
+            "return_on_risk": st.column_config.TextColumn("Return %"),
             "net_credit": st.column_config.TextColumn("Credit"),
             "max_risk": st.column_config.TextColumn("Max Risk"),
             "short_put_strike": st.column_config.NumberColumn("Short Strike"),
             "long_put_strike": st.column_config.NumberColumn("Long Strike"),
-            "short_put_delta": st.column_config.NumberColumn("Short Δ", format="%.3f"),
-            "long_put_delta": st.column_config.NumberColumn("Long Δ", format="%.3f"),
-            "spread_width": st.column_config.NumberColumn("Width")
         }
     )
 else:
-    st.warning("No trading opportunities were found that meet all the screening criteria in the last run.")
+    st.info("No trades passed all screening criteria in the last run.")
 
 
-# --- Methodology Expander ---
-with st.expander("📖 Click here to see the Strategy Methodology"):
+# --- Display All Scanned Results ---
+st.header("🔍 All Scanned Underlyings")
+st.markdown("Full results from the last scan. Rows highlighted in green passed all filters.")
+
+# Function to highlight rows that passed
+def highlight_pass(row):
+    return ['background-color: #2E4E36'] * len(row) if row.status == 'PASS' else [''] * len(row)
+
+# Prepare a simplified DataFrame for display
+display_cols = ['symbol', 'vol_rank', 'status', 'reason']
+display_df = all_results_df[display_cols].copy()
+display_df.rename(columns={'symbol': 'Ticker', 'vol_rank': 'Vol Rank', 'status': 'Status', 'reason': 'Details'}, inplace=True)
+
+st.dataframe(
+    display_df.style.apply(highlight_pass, axis=1),
+    use_container_width=True,
+    hide_index=True,
+)
+
+with st.expander("📖 View Strategy Methodology"):
     st.markdown("""
-    This screener identifies potential bull put spread opportunities by applying a series of quantitative filters. A trade must pass all stages to be displayed.
-
-    - **Stage 1: Universe Filter**
-      - **Eligible Underlyings:** Only screens highly liquid, pre-approved stocks and ETFs (`SPY, QQQ, AAPL`, etc.).
-
-    - **Stage 2: Macro Environment Filter**
-      - **Volatility Rank > 40%:** Ensures we are only selling options when the premium is relatively "rich" compared to its 52-week history. This is the most important filter for getting paid for the risk.
-
-    - **Stage 3: Trade Structure Filter**
-      - **Days to Expiration (DTE):** Looks for options between **30-50 days** to expiration to capture the best part of the time decay curve.
-      - **Short Strike Delta:** Selects a short put strike with a delta between **-0.20 and -0.30**.
-      - **Long Strike Delta:** Selects a long put strike with a delta around **-0.10** to define risk.
-      - **Premium Rule:** The net credit received must be at least **1/3 of the spread's width**.
-
-    - **Stage 4: Technical Confluence Score**
-      - A simple 2-point score to avoid selling into obviously weak stocks.
-      - `+1 point` if Price > 50-day SMA.
-      - `+1 point` if 14-day RSI < 70.
+    - **Volatility Rank > 40%:** Ensures we only sell options when the premium is relatively "rich".
+    - **DTE:** Looks for options between **30-50 days** to expiration.
+    - **Delta Selection:** Short strike delta between **-0.20 & -0.30**; Long strike delta around **-0.10**.
+    - **Premium Rule:** Net credit must be at least **1/3 of the spread's width**.
+    - **Technical Score:** Simple 2-point score (Price > 50-SMA, RSI < 70).
     """)
