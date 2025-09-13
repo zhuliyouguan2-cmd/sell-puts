@@ -1,68 +1,103 @@
 import streamlit as st
 import pandas as pd
-from backend import process_tickers # Import the main function from the backend
+from backend import process_tickers # Import from backend
 
-# --- Streamlit UI ---
 st.set_page_config(layout="wide")
-st.title("Value Investor's Put Option Screener")
+
+# --- UI Styling ---
 st.markdown("""
-This tool helps value investors find attractive put options to sell on their pre-approved list of stocks. 
-It scores options based on profitability, safety, and risk management.
-""")
+    <style>
+    .stDataFrame {
+        font-size: 1.1rem;
+    }
+    .stProgress > div > div > div > div {
+        background-image: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-with st.sidebar:
-    st.header("Your Portfolio Settings")
-    portfolio_value = st.number_input("Total Portfolio Value ($)", min_value=10000, value=100000, step=10000)
-    max_sector_exposure_pct = st.slider("Max Desired Sector Exposure (%)", min_value=5, max_value=50, value=20, step=1)
+st.title("📈 Value Investor's Put Option Screener")
+st.markdown("Find attractive put-selling opportunities based on your pre-vetted list of stocks.")
+
+# --- Sidebar Inputs ---
+st.sidebar.header("Your Portfolio & Strategy")
+
+# List of tickers
+tickers_input = st.sidebar.text_area(
+    "Enter Tickers (comma-separated)", 
+    "BRKB, TSM, NVDA, UNH, GOOG, AAPL, QQQ, SPY"
+)
+
+# Portfolio value
+portfolio_value = st.sidebar.number_input(
+    "Total Portfolio Value ($)", 
+    min_value=10000, 
+    max_value=1000000, 
+    value=200000, 
+    step=10000,
+    help="Used to calculate position sizing score."
+)
+
+st.sidebar.header("Options Filtering")
+# DTE range
+min_dte, max_dte = st.sidebar.slider(
+    "Days to Expiration (DTE) Range", 
+    1, 90, (25, 50),
+    help="What range of expiration dates are you interested in?"
+)
+
+# Number of strikes to show
+num_strikes_otm = st.sidebar.slider(
+    "Number of OTM Strikes to Analyze", 
+    1, 15, 10,
+    help="How many out-of-the-money put strikes to fetch per expiration date."
+)
+
+
+# --- Main Application Logic ---
+if st.sidebar.button("Find Opportunities", type="primary"):
+    # Clean up ticker list
+    tickers_list = [ticker.strip().upper() for ticker in tickers_input.split(',') if ticker.strip()]
     
-    st.header("Options Filtering")
-    min_dte = st.slider("Minimum Days to Expiration (DTE)", 0, 90, 30)
-    max_dte = st.slider("Maximum Days to Expiration (DTE)", 0, 365, 50)
-    num_strikes_otm = st.slider("Number of Out-of-the-Money Strikes to Scan", 1, 20, 10)
-
-tickers_input = st.text_area("Enter tickers you are willing to own, separated by commas or new lines", "NVDA, UNH, GOOG, AAPL, QQQ, SPY")
-
-if st.button("Find Top Put Options"):
-    tickers = [ticker.strip().upper() for ticker in tickers_input.replace(',', '\n').split() if ticker.strip()]
-    
-    if not tickers:
+    if not tickers_list:
         st.warning("Please enter at least one ticker.")
     else:
+        # Progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        # Define a callback function to update the UI from the backend
-        def update_progress(message, progress):
+        def update_progress(message, percent_complete):
             status_text.text(message)
-            progress_bar.progress(progress)
+            progress_bar.progress(percent_complete)
 
-        # Call the backend to do all the work
-        df_sorted = process_tickers(
-            tickers, 
-            min_dte, 
-            max_dte, 
-            num_strikes_otm, 
-            portfolio_value, 
-            max_sector_exposure_pct,
-            status_callback=update_progress
-        )
+        with st.spinner("Analyzing options chains... This may take a moment."):
+            results = process_tickers(
+                tickers_list,
+                min_dte,
+                max_dte,
+                num_strikes_otm,
+                portfolio_value,
+                status_callback=update_progress
+            )
         
-        status_text.text("Scoring complete!")
+        status_text.text("Analysis complete!")
+        progress_bar.empty()
 
-        if df_sorted.empty:
-            st.warning("No suitable options found with the current filters. Try adjusting DTE or the number of strikes.")
+        if results.empty:
+            st.info("No options found matching your criteria. Try expanding the DTE range or adding more tickers.")
         else:
-            # Format the dataframe for display
-            df_display = df_sorted.copy()
-            df_display['Score'] = df_display['Score'].map('{:,.1f}'.format)
-            df_display['Strike'] = df_display['Strike'].map('${:,.2f}'.format)
-            df_display['Premium'] = df_display['Premium'].map('${:,.2f}'.format)
-            df_display['Ann. Return'] = pd.to_numeric(df_display['Ann. Return']).map('{:.2%}'.format)
-            df_display['IV'] = pd.to_numeric(df_display['IV']).map('{:.2%}'.format)
-            df_display['Margin of Safety'] = pd.to_numeric(df_display['Margin of Safety']).map('{:.2%}'.format)
-            df_display['Delta'] = df_display['Delta'].map('{:.3f}'.format)
-
-            st.dataframe(df_display[[
-                'Ticker', 'Expiration', 'Strike', 'Premium', 'Score', 'Ann. Return', 
-                'Margin of Safety', 'Delta', 'DTE', 'IV', 'Sector'
-            ]], use_container_width=True)
+            st.success(f"Found {len(results)} potential opportunities, ranked by score.")
+            
+            # Format and display the dataframe
+            results_display = results.copy()
+            results_display['Premium'] = results_display['Premium'].map('${:,.2f}'.format)
+            results_display['Strike'] = results_display['Strike'].map('{:,.2f}'.format)
+            results_display['Score'] = results_display['Score'].map('{:.1f}'.format)
+            results_display['IV'] = results_display['IV'].map('{:.1%}'.format)
+            results_display['Delta'] = results_display['Delta'].map('{:.3f}'.format)
+            results_display['Ann. Return'] = results_display['Ann. Return'].map('{:.1%}'.format)
+            results_display['Margin of Safety'] = results_display['Margin of Safety'].map('{:.1%}'.format)
+            
+            st.dataframe(results_display, use_container_width=True)
+else:
+    st.info("Enter your parameters in the sidebar and click 'Find Opportunities' to begin.")
