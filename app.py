@@ -12,12 +12,12 @@ It scores options based on profitability, safety, and risk management.
 
 with st.sidebar:
     st.header("Your Portfolio Settings")
-    portfolio_value = st.number_input("Total Portfolio Value ($)", min_value=1000, value=100000, step=1000)
+    portfolio_value = st.number_input("Total Portfolio Value ($)", min_value=10000, value=100000, step=10000)
     max_sector_exposure_pct = st.slider("Max Desired Sector Exposure (%)", min_value=5, max_value=50, value=20, step=1)
     
     st.header("Options Filtering")
-    min_dte = st.slider("Minimum Days to Expiration (DTE)", 0, 90, 20)
-    max_dte = st.slider("Maximum Days to Expiration (DTE)", 0, 365, 60)
+    min_dte = st.slider("Minimum Days to Expiration (DTE)", 0, 90, 30)
+    max_dte = st.slider("Maximum Days to Expiration (DTE)", 0, 365, 50)
     num_strikes_otm = st.slider("Number of Out-of-the-Money Strikes to Scan", 1, 20, 10)
 
 tickers_input = st.text_area("Enter tickers you are willing to own, separated by commas or new lines", "NVDA, UNH, GOOG, AAPL, QQQ, SPY")
