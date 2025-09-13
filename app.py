@@ -50,8 +50,8 @@ def get_stock_data(ticker):
             "forward_pe": forward_pe,
             "market_cap": market_cap,
             "ema_200": ema_200,
-            "expirations": expirations,
-            "stock_object": stock
+            "expirations": expirations
+            # Removed the non-serializable "stock_object"
         }
     except Exception as e:
         st.error(f"Could not fetch data for {ticker}: {e}")
@@ -135,10 +135,13 @@ for i, ticker in enumerate(tickers):
         if min_exp_date <= datetime.strptime(exp, '%Y-%m-%d') <= max_exp_date
     ]
 
+    # Create the yf.Ticker object here, as it cannot be cached
+    stock_obj = yf.Ticker(ticker)
+
     for exp in valid_expirations:
         try:
             # Puts options chain
-            opt_chain = stock_data['stock_object'].option_chain(exp)
+            opt_chain = stock_obj.option_chain(exp)
             puts = opt_chain.puts
 
             # Add stock-level data to the options dataframe
