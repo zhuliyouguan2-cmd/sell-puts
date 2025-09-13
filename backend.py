@@ -49,7 +49,7 @@ def black_scholes_put_delta(S, K, T, r, sigma):
     return delta
 
 # --- Scoring Logic ---
-def score_option(option, current_price, portfolio_value, max_sector_exposure_pct, sector):
+def score_option(option, current_price, portfolio_value, sector):
     """Scores a single put option based on the defined strategy."""
     strike = option['strike']
     premium = option['lastPrice']
@@ -84,9 +84,9 @@ def score_option(option, current_price, portfolio_value, max_sector_exposure_pct
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
     abs_delta = abs(delta)
 
-    if abs_delta < 0.25: score_delta = 5
-    elif abs_delta <= 0.35: score_delta = 3
-    elif abs_delta <= 0.45: score_delta = 1
+    if abs_delta < 0.15: score_delta = 5
+    elif abs_delta <= 0.25: score_delta = 3
+    elif abs_delta <= 0.35: score_delta = 1
     else: score_delta = 0
 
     margin_of_safety = (current_price - strike) / current_price
@@ -101,20 +101,16 @@ def score_option(option, current_price, portfolio_value, max_sector_exposure_pct
     capital_at_risk_total = (strike * 100) - (premium * 100)
     risk_as_pct_portfolio = (capital_at_risk_total / portfolio_value) * 100 if portfolio_value > 0 else float('inf')
 
-    if risk_as_pct_portfolio < 2: score_sizing = 5
-    elif risk_as_pct_portfolio <= 3: score_sizing = 3
-    elif risk_as_pct_portfolio <= 4: score_sizing = 1
+    if risk_as_pct_portfolio < 4: score_sizing = 5
+    elif risk_as_pct_portfolio <= 6: score_sizing = 3
+    elif risk_as_pct_portfolio <= 8: score_sizing = 1
     else: score_sizing = 0
 
-    if max_sector_exposure_pct > 25: score_conc = 5
-    elif max_sector_exposure_pct > 20: score_conc = 3
-    elif max_sector_exposure_pct > 15: score_conc = 1
-    else: score_conc = 0
-
-    final_score = ((score_return_on_capital * 0.30) + \
-                   (score_prob_safety * 0.30) + \
-                   (score_sizing * 0.20) + \
-                   (score_conc * 0.20)) / 5 * 100
+    # Sector exposure is no longer considered in the score.
+    # Weights have been re-distributed among the remaining factors.
+    final_score = ((score_return_on_capital * 0.40) + \
+                   (score_prob_safety * 0.40) + \
+                   (score_sizing * 0.20)) / 5 * 100
     
     return {
         'Expiration': option['expirationDate'], 'Strike': strike, 'Premium': premium,
@@ -124,7 +120,7 @@ def score_option(option, current_price, portfolio_value, max_sector_exposure_pct
     }
 
 # --- Main Processing Function ---
-def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value, max_sector_exposure_pct, status_callback=None):
+def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value, status_callback=None):
     """
     Main function to fetch, process, and score options for a list of tickers.
     """
@@ -157,7 +153,7 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
             otm_puts = puts[puts['strike'] < current_price].head(num_strikes_otm)
 
             for _, row in otm_puts.iterrows():
-                score_data = score_option(row, current_price, portfolio_value, max_sector_exposure_pct, sector)
+                score_data = score_option(row, current_price, portfolio_value, sector)
                 if score_data:
                     all_options.append(score_data)
     
