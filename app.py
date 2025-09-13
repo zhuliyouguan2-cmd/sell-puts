@@ -68,7 +68,7 @@ min_dte, max_dte = st.sidebar.slider(
 # Number of strikes to show
 num_strikes_otm = st.sidebar.slider(
     "Number of OTM Strikes to Analyze", 
-    1, 15, 5,
+    1, 25, 20,
     help="How many out-of-the-money put strikes to fetch per expiration date."
 )
 
