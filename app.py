@@ -95,23 +95,56 @@ else:
 
 # --- Display All Scanned Results ---
 st.header("🔍 All Scanned Underlyings")
-st.markdown("Full results from the last scan. Rows highlighted in green passed all filters.")
+st.markdown("Full results from the last scan, including detailed data for all tickers. Rows highlighted in green passed all filters.")
 
 # Function to highlight rows that passed
 def highlight_pass(row):
-    # Corrected line: Access the column value using dictionary-style access row['Status']
-    # instead of attribute access row.status
-    return ['background-color: #2E4E36'] * len(row) if row['Status'] == 'PASS' else [''] * len(row)
+    # Use the original 'status' column for the logic
+    return ['background-color: #2E4E36'] * len(row) if row['status'] == 'PASS' else [''] * len(row)
 
-# Prepare a simplified DataFrame for display
-display_cols = ['symbol', 'vol_rank', 'status', 'reason']
-display_df = all_results_df[display_cols].copy()
-display_df.rename(columns={'symbol': 'Ticker', 'vol_rank': 'Vol Rank', 'status': 'Status', 'reason': 'Details'}, inplace=True)
+# Prepare the full DataFrame for display, handling formatting for potentially missing data
+full_display_df = all_results_df.copy()
+
+# Apply formatting, checking for NaN values to avoid errors
+for col in ['current_price', 'net_credit', 'max_risk']:
+    if col in full_display_df.columns:
+        full_display_df[col] = full_display_df[col].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "—")
+
+if 'return_on_risk' in full_display_df.columns:
+    full_display_df[col] = full_display_df[col].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "—")
+
+# Fill NaN in other specific columns for a cleaner look
+for col in ['short_put_strike', 'long_put_strike', 'tech_score']:
+     if col in full_display_df.columns:
+        full_display_df[col] = full_display_df[col].fillna("—")
+
+# Define the full column order
+all_column_order = [
+    'symbol', 'status', 'reason', 'vol_rank', 'tech_score', 'current_price', 
+    'return_on_risk', 'net_credit', 'max_risk', 'short_put_strike', 'long_put_strike'
+]
+# Filter to only columns that actually exist in the dataframe to prevent errors
+all_column_order_existing = [col for col in all_column_order if col in full_display_df.columns]
+display_df = full_display_df[all_column_order_existing]
+
 
 st.dataframe(
     display_df.style.apply(highlight_pass, axis=1),
     use_container_width=True,
     hide_index=True,
+    column_config={
+        "symbol": st.column_config.TextColumn("Ticker"),
+        "status": st.column_config.TextColumn("Status"),
+        "reason": st.column_config.TextColumn("Details", width="medium"),
+        "vol_rank": st.column_config.TextColumn("Vol Rank"),
+        "tech_score": st.column_config.TextColumn("Tech Score"),
+        "current_price": st.column_config.TextColumn("Price"),
+        "return_on_risk": st.column_config.TextColumn("Return %"),
+        "net_credit": st.column_config.TextColumn("Credit"),
+        "max_risk": st.column_config.TextColumn("Max Risk"),
+        "short_put_strike": st.column_config.TextColumn("Short K"),
+        "long_put_strike": st.column_config.TextColumn("Long K"),
+    }
 )
 
 with st.expander("📖 View Strategy Methodology"):
