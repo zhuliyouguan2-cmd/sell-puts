@@ -63,10 +63,14 @@ def score_option(option, current_price, portfolio_value, max_sector_exposure_pct
     capital_at_risk_per_share = strike - premium
     annualized_return = (premium / capital_at_risk_per_share) * (365 / dte) if capital_at_risk_per_share > 0 else 0
     
+    # Filter out any options with less than 8% annualized return
+    if annualized_return < 0.08:
+        return None
+    
     if annualized_return > 0.20: score_ar = 5
     elif annualized_return >= 0.15: score_ar = 3
     elif annualized_return >= 0.10: score_ar = 1
-    else: score_ar = 0
+    else: score_ar = 0 # This now covers the 8% to 10% range
 
     if iv > 0.50: score_iv = 5
     elif iv >= 0.30: score_iv = 3
