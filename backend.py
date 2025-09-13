@@ -9,23 +9,31 @@ import streamlit as st # Still need for caching decorator
 # The cache is managed here in the backend where the data fetching occurs.
 @st.cache_data(ttl=900)
 def get_stock_data(ticker):
-    """Fetches stock data and options chain from yfinance."""
+    """
+    Fetches serializable stock data from yfinance.
+    Returns price, sector, and expiration dates, which are all serializable.
+    """
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
         price = stock.history(period="1d")['Close'].iloc[-1]
         sector = info.get('sector', 'N/A')
         expirations = stock.options
-        return price, sector, expirations, stock
+        return price, sector, expirations
     except Exception as e:
-        print(f"Error fetching data for {ticker}: {e}") # Log error
-        return None, None, None, None
+        print(f"Error fetching stock data for {ticker}: {e}") # Log error
+        return None, None, None
 
 @st.cache_data(ttl=900)
-def get_options_chain(stock_ticker_obj, expiration):
-    """Fetches the options chain for a specific expiration date."""
+def get_options_chain_puts(ticker, expiration):
+    """
+    Fetches the put options DataFrame for a specific ticker and expiration date.
+    A pandas DataFrame is a serializable object.
+    """
     try:
-        return stock_ticker_obj.option_chain(expiration)
+        stock = yf.Ticker(ticker)
+        options = stock.option_chain(expiration)
+        return options.puts # Return only the DataFrame
     except Exception:
         return None
 
@@ -122,7 +130,7 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
         if status_callback:
             status_callback(f"Fetching data for {ticker}...", (i + 1) / len(tickers))
 
-        current_price, sector, expirations, stock_obj = get_stock_data(ticker)
+        current_price, sector, expirations = get_stock_data(ticker)
 
         if current_price is None or not expirations:
             print(f"Skipping {ticker} due to missing data.")
@@ -135,10 +143,10 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
                 valid_expirations.append(exp_str)
 
         for exp in valid_expirations:
-            options_chain = get_options_chain(stock_obj, exp)
-            if options_chain is None: continue
+            puts = get_options_chain_puts(ticker, exp)
+            
+            if puts is None or puts.empty: continue
 
-            puts = options_chain.puts
             puts['ticker'] = ticker
             puts['expirationDate'] = exp
 
