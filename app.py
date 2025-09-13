@@ -24,11 +24,11 @@ with st.expander("How are these options scored?"):
     st.markdown("""
     The final score (out of 100) is a weighted average of four key areas:
 
-    **1. Return on Capital (35% Weight)**
+    **1. Return on Capital (20% Weight)**
     - **Annualized Return:** The theoretical return if you held the position for a year.
     - **Implied Volatility (IV):** Rewards a healthy level of IV for higher premiums.
 
-    **2. Probability & Safety (35% Weight)**
+    **2. Probability & Safety (50% Weight)**
     - **Delta:** A lower delta (lower probability of expiring in-the-money) is safer and scores higher.
     - **Margin of Safety:** The percentage the stock price is *above* the strike price. A larger buffer is safer.
 
