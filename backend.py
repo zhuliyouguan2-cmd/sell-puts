@@ -98,7 +98,7 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     r = 0.04 
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
     abs_delta = abs(delta)
-    score_delta = linear_scale(abs_delta, worst=0.45, best=0.10) # Lower is better
+    score_delta = linear_scale(abs_delta, worst=0.35, best=0.10) # Lower is better
     margin_of_safety = (current_price - strike) / current_price
     score_mos = linear_scale(margin_of_safety, worst=0.05, best=0.20)
     score_prob_safety = (score_delta + score_mos) / 2
