@@ -61,7 +61,7 @@ st.sidebar.header("Options Filtering")
 # DTE range
 min_dte, max_dte = st.sidebar.slider(
     "Days to Expiration (DTE) Range", 
-    1, 90, (15, 45),
+    1, 90, (25, 50),
     help="What range of expiration dates are you interested in?"
 )
 
