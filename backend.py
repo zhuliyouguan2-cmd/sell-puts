@@ -9,20 +9,27 @@ import streamlit as st
 @st.cache_data(ttl=900)
 def get_stock_data_and_technicals(ticker):
     """
-    Fetches serializable stock data and calculates technical indicators.
-    Returns price, sector, expirations, RSI, and SMA details.
+    Fetches serializable stock data, calculates technicals, and historical volatility range.
     """
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
-        hist = stock.history(period="250d") # Fetch enough data for SMAs
+        # Fetch 1 year of data for HV calculation
+        hist = stock.history(period="1y")
 
-        if hist.empty:
-            return None, None, None, None, None, None
+        if hist.empty or len(hist) < 30: # Need at least 30 days for rolling HV
+            return None, None, None, None, None, None, None, None
 
         price = hist['Close'].iloc[-1]
         sector = info.get('sector', 'N/A')
         expirations = stock.options
+
+        # --- Calculate Historical Volatility (HV) Range for IV Rank Proxy ---
+        log_returns = np.log(hist['Close'] / hist['Close'].shift(1))
+        # 30-day rolling annualized volatility
+        rolling_hv = log_returns.rolling(window=30).std() * np.sqrt(252)
+        hv_low_1y = rolling_hv.min()
+        hv_high_1y = rolling_hv.max()
 
         # --- Calculate Technical Indicators ---
         delta_hist = hist['Close'].diff()
@@ -35,10 +42,10 @@ def get_stock_data_and_technicals(ticker):
         sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
         sma_200 = hist['Close'].rolling(window=200).mean().iloc[-1]
 
-        return price, sector, expirations, current_rsi, sma_50, sma_200
+        return price, sector, expirations, current_rsi, sma_50, sma_200, hv_low_1y, hv_high_1y
     except Exception as e:
-        print(f"Error fetching technical data for {ticker}: {e}")
-        return None, None, None, None, None, None
+        print(f"Error fetching data for {ticker}: {e}")
+        return None, None, None, None, None, None, None, None
 
 
 @st.cache_data(ttl=900)
@@ -62,19 +69,18 @@ def black_scholes_put_delta(S, K, T, r, sigma):
 
 def linear_scale(value, worst, best):
     """Linearly scales a value from a 'worst' to 'best' range to a 0-5 score."""
-    # If the best value is lower than the worst, reverse the logic (lower is better)
-    if best < worst:
+    if best < worst: # Lower is better
         worst, best = best, worst
         value = max(worst, min(best, value)) # Clamp
         score = 5 * (best - value) / (best - worst)
-    else:
+    else: # Higher is better
         value = max(worst, min(best, value)) # Clamp
         score = 5 * (value - worst) / (best - worst)
     return score
 
 # --- Scoring Logic ---
-def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sma_200):
-    """Scores a single put option using continuous linear functions."""
+def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sma_200, hv_low_1y, hv_high_1y):
+    """Scores a single put option using continuous linear functions and IV Rank."""
     strike = option['strike']
     premium = option['lastPrice']
     iv = option['impliedVolatility']
@@ -88,12 +94,20 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     if annualized_return < 0.08:
         return None
 
-    # 1. Return on Capital (20% Weight)
-    score_ar = linear_scale(annualized_return, worst=0.08, best=0.25)
-    score_iv = linear_scale(iv, worst=0.15, best=0.60)
-    score_return_on_capital = (score_ar + score_iv) / 2
+    # Calculate IV Rank
+    iv_range = hv_high_1y - hv_low_1y
+    if iv_range > 0:
+        iv_rank = (iv - hv_low_1y) / iv_range
+    else:
+        iv_rank = 0.5 # Default to neutral if no range
+    iv_rank = max(0, min(1, iv_rank)) # Clamp between 0 and 1
 
-    # 2. Probability & Safety (50% Weight)
+    # 1. Return on Capital (25% Weight)
+    score_ar = linear_scale(annualized_return, worst=0.08, best=0.25)
+    score_iv_rank = linear_scale(iv_rank, worst=0.10, best=0.80) # Score based on IV Rank
+    score_return_on_capital = (score_ar + score_iv_rank) / 2
+
+    # 2. Probability & Safety (45% Weight)
     T = dte / 365.0
     r = 0.04 
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
@@ -106,7 +120,7 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     # 3. Basic Technical Indicators (20% Weight)
     score_rsi = linear_scale(rsi, worst=65, best=35) # Lower is better
     price_vs_sma_pct = (current_price - sma_200) / sma_200
-    score_sma = linear_scale(price_vs_sma_pct, worst=0.0, best=0.15) # Higher % above SMA is better
+    score_sma = linear_scale(price_vs_sma_pct, worst=0.0, best=0.15)
     score_technicals = (score_rsi + score_sma) / 2
 
     # 4. Risk Management (10% Weight)
@@ -115,14 +129,14 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     score_sizing = linear_scale(risk_as_pct_portfolio, worst=10.0, best=1.0) # Lower is better
 
     # Final Score Calculation
-    final_score = ((score_return_on_capital * 0.20) + \
-                   (score_prob_safety * 0.50) + \
+    final_score = ((score_return_on_capital * 0.25) + \
+                   (score_prob_safety * 0.45) + \
                    (score_technicals * 0.20) + \
                    (score_sizing * 0.10)) / 5 * 100
     
     return {
         'Expiration': option['expirationDate'], 'Strike': strike, 'Premium': premium,
-        'DTE': dte, 'IV': iv, 'Delta': delta, 'Ann. Return': annualized_return,
+        'DTE': dte, 'IV Rank': iv_rank, 'Delta': delta, 'Ann. Return': annualized_return,
         'Margin of Safety': margin_of_safety, 'Score': final_score,
         'Ticker': option['ticker'], 'Sector': sector
     }
@@ -134,7 +148,8 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
         if status_callback:
             status_callback(f"Fetching data for {ticker}...", (i + 1) / len(tickers))
 
-        current_price, sector, expirations, rsi, sma_50, sma_200 = get_stock_data_and_technicals(ticker)
+        (current_price, sector, expirations, rsi, sma_50, sma_200, 
+         hv_low_1y, hv_high_1y) = get_stock_data_and_technicals(ticker)
 
         if current_price is None or not expirations:
             print(f"Skipping {ticker} due to missing data.")
@@ -150,7 +165,8 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
             otm_puts = puts[puts['strike'] < current_price].head(num_strikes_otm)
 
             for _, row in otm_puts.iterrows():
-                score_data = score_option(row, current_price, portfolio_value, sector, rsi, sma_50, sma_200)
+                score_data = score_option(row, current_price, portfolio_value, sector, 
+                                          rsi, sma_50, sma_200, hv_low_1y, hv_high_1y)
                 if score_data:
                     all_options.append(score_data)
     
@@ -159,12 +175,11 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
 
     df = pd.DataFrame(all_options)
     
-    # Define the desired column order with Ticker first
+    # Define the desired column order with Ticker first and IV Rank instead of IV
     column_order = [
         'Ticker', 'Expiration', 'Strike', 'Premium', 'Score', 'Ann. Return', 
-        'Margin of Safety', 'DTE', 'IV', 'Delta', 'Sector'
+        'Margin of Safety', 'DTE', 'IV Rank', 'Delta', 'Sector'
     ]
-    # Reorder the DataFrame, handling potential missing columns gracefully
     df = df.reindex(columns=column_order)
 
     return df.sort_values(by='Score', ascending=False).reset_index(drop=True)
