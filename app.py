@@ -99,7 +99,9 @@ st.markdown("Full results from the last scan. Rows highlighted in green passed a
 
 # Function to highlight rows that passed
 def highlight_pass(row):
-    return ['background-color: #2E4E36'] * len(row) if row.status == 'PASS' else [''] * len(row)
+    # Corrected line: Access the column value using dictionary-style access row['Status']
+    # instead of attribute access row.status
+    return ['background-color: #2E4E36'] * len(row) if row['Status'] == 'PASS' else [''] * len(row)
 
 # Prepare a simplified DataFrame for display
 display_cols = ['symbol', 'vol_rank', 'status', 'reason']
