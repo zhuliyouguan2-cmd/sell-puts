@@ -65,15 +65,8 @@ st.sidebar.header("Options Filtering")
 # DTE range
 min_dte, max_dte = st.sidebar.slider(
     "Days to Expiration (DTE) Range", 
-    1, 90, (30, 45),
+    1, 90, (20, 45),
     help="What range of expiration dates are you interested in?"
-)
-
-# Number of strikes to show
-num_strikes_otm = st.sidebar.slider(
-    "Number of OTM Strikes to Analyze", 
-    1, 25, 18,
-    help="How many out-of-the-money put strikes to fetch per expiration date."
 )
 
 
@@ -98,7 +91,6 @@ if st.sidebar.button("Find Opportunities", type="primary"):
                 tickers_list,
                 min_dte,
                 max_dte,
-                num_strikes_otm,
                 portfolio_value,
                 status_callback=update_progress
             )
@@ -121,6 +113,6 @@ if st.sidebar.button("Find Opportunities", type="primary"):
             results_display['Ann. Return'] = results_display['Ann. Return'].map('{:.1%}'.format)
             results_display['Margin of Safety'] = results_display['Margin of Safety'].map('{:.1%}'.format)
             
-            st.dataframe(results_display, use_container_width=True)
+            st.dataframe(results_display.head(25), use_container_width=True)
 else:
     st.info("Enter your parameters in the sidebar and click 'Find Opportunities' to begin.")
