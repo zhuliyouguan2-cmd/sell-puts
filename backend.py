@@ -102,12 +102,12 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
         iv_rank = 0.5 # Default to neutral if no range
     iv_rank = max(0, min(1, iv_rank)) # Clamp between 0 and 1
 
-    # 1. Return on Capital (25% Weight)
+    # 1. Return on Capital (35% Weight)
     score_ar = linear_scale(annualized_return, worst=0.08, best=0.25)
     score_iv_rank = linear_scale(iv_rank, worst=0.10, best=0.80) # Score based on IV Rank
     score_return_on_capital = (score_ar + score_iv_rank) / 2
 
-    # 2. Probability & Safety (45% Weight)
+    # 2. Probability & Safety (35% Weight)
     T = dte / 365.0
     r = 0.04 
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
@@ -129,8 +129,8 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     score_sizing = linear_scale(risk_as_pct_portfolio, worst=10.0, best=1.0) # Lower is better
 
     # Final Score Calculation
-    final_score = ((score_return_on_capital * 0.25) + \
-                   (score_prob_safety * 0.45) + \
+    final_score = ((score_return_on_capital * 0.35) + \
+                   (score_prob_safety * 0.35) + \
                    (score_technicals * 0.20) + \
                    (score_sizing * 0.10)) / 5 * 100
     
@@ -142,7 +142,7 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     }
 
 # --- Main Processing Function ---
-def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value, status_callback=None):
+def process_tickers(tickers, min_dte, max_dte, portfolio_value, status_callback=None):
     all_options = []
     for i, ticker in enumerate(tickers):
         if status_callback:
@@ -162,7 +162,7 @@ def process_tickers(tickers, min_dte, max_dte, num_strikes_otm, portfolio_value,
             if puts is None or puts.empty: continue
             puts['ticker'] = ticker
             puts['expirationDate'] = exp
-            otm_puts = puts[puts['strike'] < current_price].head(num_strikes_otm)
+            otm_puts = puts[puts['strike'] < current_price]
 
             for _, row in otm_puts.iterrows():
                 score_data = score_option(row, current_price, portfolio_value, sector, 
