@@ -24,11 +24,11 @@ with st.expander("How are these options scored?"):
     st.markdown("""
     The final score (out of 100) is a weighted average of four key areas:
 
-    **1. Return on Capital (25% Weight)**
+    **1. Return on Capital (35% Weight)**
     - **Annualized Return:** The theoretical return if you held the position for a year.
     - **Implied Volatility (IV):** Rewards a healthy level of IV for higher premiums.
 
-    **2. Probability & Safety (45% Weight)**
+    **2. Probability & Safety (35% Weight)**
     - **Delta:** A lower delta (lower probability of expiring in-the-money) is safer and scores higher.
     - **Margin of Safety:** The percentage the stock price is *above* the strike price. A larger buffer is safer.
 
@@ -101,10 +101,15 @@ if st.sidebar.button("Find Opportunities", type="primary"):
         if results.empty:
             st.info("No options found matching your criteria. Try expanding the DTE range or adding more tickers.")
         else:
-            st.success(f"Found {len(results)} potential opportunities, ranked by score.")
+            # --- REVISION ---
+            # Group by ticker and select the top 5 results for each.
+            # This assumes the 'results' DataFrame is already sorted by score from the backend.
+            display_data = results.groupby('Ticker').head(5)
+            
+            # st.success(f"Found {len(display_data)} potential opportunities, showing the top 5 per ticker.")
             
             # Format and display the dataframe
-            results_display = results.copy()
+            results_display = display_data.copy()
             results_display['Premium'] = results_display['Premium'].map('${:,.2f}'.format)
             results_display['Strike'] = results_display['Strike'].map('{:,.2f}'.format)
             results_display['Score'] = results_display['Score'].map('{:.1f}'.format)
@@ -113,6 +118,6 @@ if st.sidebar.button("Find Opportunities", type="primary"):
             results_display['Ann. Return'] = results_display['Ann. Return'].map('{:.1%}'.format)
             results_display['Margin of Safety'] = results_display['Margin of Safety'].map('{:.1%}'.format)
             
-            st.dataframe(results_display.head(25), use_container_width=True)
+            st.dataframe(results_display, use_container_width=True)
 else:
     st.info("Enter your parameters in the sidebar and click 'Find Opportunities' to begin.")
