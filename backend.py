@@ -102,12 +102,12 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
         iv_rank = 0.5 # Default to neutral if no range
     iv_rank = max(0, min(1, iv_rank)) # Clamp between 0 and 1
 
-    # 1. Return on Capital (45% Weight)
+    # 1. Return on Capital (40% Weight)
     score_ar = linear_scale(annualized_return, worst=0.08, best=0.25)
     score_iv_rank = linear_scale(iv_rank, worst=0.10, best=0.80) # Score based on IV Rank
     score_return_on_capital = (score_ar + score_iv_rank) / 2
 
-    # 2. Probability & Safety (25% Weight)
+    # 2. Probability & Safety (30% Weight)
     T = dte / 365.0
     r = 0.04 
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
@@ -129,8 +129,8 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     score_sizing = linear_scale(risk_as_pct_portfolio, worst=10.0, best=1.0) # Lower is better
 
     # Final Score Calculation
-    final_score = ((score_return_on_capital * 0.45) + \
-                   (score_prob_safety * 0.25) + \
+    final_score = ((score_return_on_capital * 0.40) + \
+                   (score_prob_safety * 0.30) + \
                    (score_technicals * 0.20) + \
                    (score_sizing * 0.10)) / 5 * 100
     
