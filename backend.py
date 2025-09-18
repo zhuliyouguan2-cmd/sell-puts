@@ -102,12 +102,12 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
         iv_rank = 0.5 # Default to neutral if no range
     iv_rank = max(0, min(1, iv_rank)) # Clamp between 0 and 1
 
-    # 1. Return on Capital (40% Weight)
+    # 1. Return on Capital (45% Weight)
     score_ar = linear_scale(annualized_return, worst=0.08, best=0.25)
     score_iv_rank = linear_scale(iv_rank, worst=0.10, best=0.80) # Score based on IV Rank
     score_return_on_capital = (score_ar + score_iv_rank) / 2
 
-    # 2. Probability & Safety (30% Weight)
+    # 2. Probability & Safety (35% Weight)
     T = dte / 365.0
     r = 0.04 
     delta = black_scholes_put_delta(current_price, strike, T, r, iv)
@@ -117,22 +117,22 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     score_mos = linear_scale(margin_of_safety, worst=0.05, best=0.20)
     score_prob_safety = (score_delta + score_mos) / 2
 
-    # 3. Basic Technical Indicators (20% Weight)
+    # 3. Basic Technical Indicators (15% Weight)
     score_rsi = linear_scale(rsi, worst=65, best=35) # Lower is better
     price_vs_sma_pct = (current_price - sma_200) / sma_200
     score_sma = linear_scale(price_vs_sma_pct, worst=0.0, best=0.15)
     score_technicals = (score_rsi + score_sma) / 2
 
-    # 4. Risk Management (10% Weight)
+    # 4. Risk Management (5% Weight)
     capital_at_risk_total = (strike * 100) - (premium * 100)
     risk_as_pct_portfolio = (capital_at_risk_total / portfolio_value) * 100 if portfolio_value > 0 else float('inf')
     score_sizing = linear_scale(risk_as_pct_portfolio, worst=10.0, best=1.0) # Lower is better
 
     # Final Score Calculation
-    final_score = ((score_return_on_capital * 0.40) + \
-                   (score_prob_safety * 0.30) + \
-                   (score_technicals * 0.20) + \
-                   (score_sizing * 0.10)) / 5 * 100
+    final_score = ((score_return_on_capital * 0.45) + \
+                   (score_prob_safety * 0.35) + \
+                   (score_technicals * 0.15) + \
+                   (score_sizing * 0.05)) / 5 * 100
     
     return {
         'Expiration': option['expirationDate'], 'Strike': strike, 'Premium': premium,
