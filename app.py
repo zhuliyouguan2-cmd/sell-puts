@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
-from backend import process_tickers # Import from backend
+# --- MODIFIED IMPORT ---
+# We now also import 'get_qqq_status' (which you will add to your backend.py)
+from backend import process_tickers, get_qqq_status 
 
 st.set_page_config(layout="wide")
 
@@ -12,6 +14,12 @@ st.markdown("""
     }
     .stProgress > div > div > div > div {
         background-image: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
+    }
+    /* Style for the QQQ Dashboard metrics */
+    .st-emotion-cache-1g6gooi { 
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 0.5rem;
+        padding: 1rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -78,7 +86,54 @@ if st.sidebar.button("Find Opportunities", type="primary"):
     if not tickers_list:
         st.warning("Please enter at least one ticker.")
     else:
-        # Progress bar
+        
+        # --- *** NEW QQQ DASHBOARD SECTION *** ---
+        # If QQQ is in the list, show the strategy dashboard
+        if 'QQQ' in tickers_list:
+            st.subheader("QQQ Deployment Strategy Dashboard")
+            try:
+                with st.spinner("Analyzing QQQ Weekly EMA status..."):
+                    qqq_status = get_qqq_status() 
+                
+                if qqq_status:
+                    price = qqq_status['current_price']
+                    ema_26 = qqq_status['ema_26']
+                    ema_52 = qqq_status['ema_52']
+                    ema_104 = qqq_status['ema_104']
+
+                    st.metric("QQQ Current Price", f"${price:,.2f}")
+
+                    col1, col2, col3 = st.columns(3)
+                    
+                    # --- EMA 26 ---
+                    col1.metric("26-Week EMA (130d)", f"${ema_26:,.2f}")
+                    if price <= ema_26:
+                        col1.error("🚨 TRIGGER 1: Deploy 20%")
+                    else:
+                        col1.success(f"Price is ${price - ema_26:,.2f} above.")
+                    
+                    # --- EMA 52 ---
+                    col2.metric("52-Week EMA (260d)", f"${ema_52:,.2f}")
+                    if price <= ema_52:
+                        col2.error("🚨 TRIGGER 2: Deploy 50% Rem.")
+                    else:
+                        col2.success(f"Price is ${price - ema_52:,.2f} above.")
+
+                    # --- EMA 104 ---
+                    col3.metric("104-Week EMA (520d)", f"${ema_104:,.2f}")
+                    if price <= ema_104:
+                        col3.error("🚨 TRIGGER 3: Deploy 80% Rem.")
+                    else:
+                        col3.success(f"Price is ${price - ema_104:,.2f} above.")
+                    
+                    st.markdown("---") # Add a separator
+                else:
+                    st.warning("Could not retrieve QQQ status.")
+            except Exception as e:
+                st.error(f"Error fetching QQQ status. Make sure 'get_qqq_status' function is in backend.py. Error: {e}")
+        # --- *** END OF NEW SECTION *** ---
+
+        # --- Existing Options Screener Logic ---
         progress_bar = st.progress(0)
         status_text = st.empty()
 
