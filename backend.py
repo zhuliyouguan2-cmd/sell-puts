@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import norm
 from datetime import datetime
+import datetime # Added for get_qqq_status
 import streamlit as st
 
 # --- Caching ---
@@ -57,6 +58,57 @@ def get_options_chain_puts(ticker, expiration):
         return options.puts
     except Exception:
         return None
+
+# --- *** NEW QQQ STATUS FUNCTION (ADDED) *** ---
+@st.cache_data(ttl=900)
+def get_qqq_status():
+    """
+    Fetches QQQ data and calculates weekly EMAs based on the strategy.
+    Returns a dictionary with current price and EMA values.
+    """
+    try:
+        # We need ~2 years of data for the 104-week (520-day) EMA
+        start_date = (datetime.date.today() - datetime.timedelta(days=730)).strftime('%Y-%m-%d')
+        
+        # Download data, setting auto_adjust=False to get 'Adj Close'
+        df = yf.download('QQQ', start=start_date, auto_adjust=False)
+        
+        if df.empty:
+            print("Error: No data downloaded for QQQ.")
+            return None
+            
+        # Standardize columns (handles 'open' vs 'Open' and MultiIndex)
+        df.columns = [col[0].title() if isinstance(col, tuple) else col.title() for col in df.columns]
+        df = df.loc[~df.index.duplicated(keep='first')]
+        df.sort_index(inplace=True)
+
+        # Calculate EMAs on 'Adj Close' (price adjusted for splits/dividends)
+        # 26 weeks * 5 days/week = 130 days
+        # 52 weeks * 5 days/week = 260 days
+        # 104 weeks * 5 days/week = 520 days
+        df['EMA26'] = df['Adj Close'].ewm(span=130, adjust=False).mean()
+        df['EMA52'] = df['Adj Close'].ewm(span=260, adjust=False).mean()
+        df['EMA104'] = df['Adj Close'].ewm(span=520, adjust=False).mean()
+        
+        # Get the very last row of data
+        latest_data = df.iloc[-1]
+        
+        # Get current price (most recent 'Adj Close')
+        current_price = latest_data['Adj Close']
+        
+        status = {
+            'current_price': current_price,
+            'ema_26': latest_data['EMA26'],
+            'ema_52': latest_data['EMA52'],
+            'ema_104': latest_data['EMA104']
+        }
+        return status
+        
+    except Exception as e:
+        print(f"Error in get_qqq_status: {e}")
+        return None
+# --- *** END OF NEW FUNCTION *** ---
+
 
 # --- Calculation Logic ---
 def black_scholes_put_delta(S, K, T, r, sigma):
@@ -130,9 +182,9 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
 
     # Final Score Calculation
     final_score = ((score_return_on_capital * 0.45) + \
-                   (score_prob_safety * 0.35) + \
-                   (score_technicals * 0.15) + \
-                   (score_sizing * 0.05)) / 5 * 100
+                      (score_prob_safety * 0.35) + \
+                      (score_technicals * 0.15) + \
+                      (score_sizing * 0.05)) / 5 * 100
     
     return {
         'Expiration': option['expirationDate'], 'Strike': strike, 'Premium': premium,
