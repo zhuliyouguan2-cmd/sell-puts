@@ -133,7 +133,7 @@ def linear_scale(value, worst, best):
 def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sma_200, hv_low_1y, hv_high_1y):
     """Scores a single put option using continuous linear functions and IV Rank."""
     strike = option['strike']
-    premium = option['lastPrice']
+    premium = option['bid']
     iv = option['impliedVolatility']
     dte = (datetime.datetime.strptime(option['expirationDate'], '%Y-%m-%d') - datetime.datetime.now()).days
     
