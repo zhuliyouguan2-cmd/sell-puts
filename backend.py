@@ -2,7 +2,6 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from scipy.stats import norm
-from datetime import datetime
 import datetime # Added for get_qqq_status
 import streamlit as st
 
@@ -136,7 +135,7 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
     strike = option['strike']
     premium = option['lastPrice']
     iv = option['impliedVolatility']
-    dte = (datetime.strptime(option['expirationDate'], '%Y-%m-%d') - datetime.now()).days
+    dte = (datetime.datetime.strptime(option['expirationDate'], '%Y-%m-%d') - datetime.datetime.now()).days
     
     if dte <= 0 or premium <= 0 or strike <= 0:
         return None
@@ -207,7 +206,7 @@ def process_tickers(tickers, min_dte, max_dte, portfolio_value, status_callback=
             print(f"Skipping {ticker} due to missing data.")
             continue
 
-        valid_expirations = [exp for exp in expirations if min_dte <= (datetime.strptime(exp, '%Y-%m-%d') - datetime.now()).days <= max_dte]
+        valid_expirations = [exp for exp in expirations if min_dte <= (datetime.datetime.strptime(exp, '%Y-%m-%d') - datetime.datetime.now()).days <= max_dte]
 
         for exp in valid_expirations:
             puts = get_options_chain_puts(ticker, exp)
