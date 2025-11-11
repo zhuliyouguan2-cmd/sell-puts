@@ -2,10 +2,84 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from scipy.stats import norm
-import datetime # Added for get_qqq_status
+import datetime
 import streamlit as st
+# import requests # No longer needed, pd.read_html handles it
 
 # --- Caching ---
+@st.cache_data(ttl=86400) # Cache for 1 day
+def get_ndx_tickers():
+    """
+    Fetches the list of NASDAQ-100 tickers from Wikipedia.
+    """
+    try:
+        url = 'https://en.wikipedia.org/wiki/NASDAQ-100'
+        # pd.read_html needs lxml or beautifulsoup4 installed
+        tables = pd.read_html(url)
+        # Find the correct table. It's usually the 4th or 5th one.
+        # We look for one that has "Ticker" and "Company" columns.
+        ndx_table = None
+        for table in tables:
+            if 'Ticker' in table.columns and 'Company' in table.columns:
+                ndx_table = table
+                break
+        
+        if ndx_table is None:
+            print("Could not find NASDAQ-100 ticker table on Wikipedia.")
+            return []
+            
+        # The ticker list may contain non-standard tickers (e.g., 'BRK.B').
+        # yfinance can handle most of them.
+        tickers = ndx_table['Ticker'].tolist()
+        return tickers
+    except Exception as e:
+        print(f"Error fetching NDX tickers: {e}")
+        # Fallback list in case Wikipedia scrape fails
+        return ['AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA'] # Add more if you like
+
+@st.cache_data(ttl=86400) # Cache for 1 hour
+def get_market_breadth():
+    """
+    Calculates market breadth for NASDAQ-100.
+    - % stocks > MA20
+    - % stocks > MA50
+    - % stocks > MA200
+    """
+    try:
+        tickers = get_ndx_tickers()
+        if not tickers:
+            return None
+
+        # Download data for all tickers at once. 201 days for 200-day MA.
+        data = yf.download(tickers, period="201d", auto_adjust=True)['Close']
+        
+        if data.empty:
+            return None
+
+        # Get the latest price for each stock
+        latest_price = data.iloc[-1]
+
+        # Calculate MAs for all stocks
+        ma20 = data.rolling(window=20).mean().iloc[-1]
+        ma50 = data.rolling(window=50).mean().iloc[-1]
+        ma200 = data.rolling(window=200).mean().iloc[-1]
+
+        # Count how many stocks are above their MAs
+        # .count() gives the number of non-NaN values, which is our true total
+        breadth_20 = (latest_price > ma20).sum() / ma20.count() * 100
+        breadth_50 = (latest_price > ma50).sum() / ma50.count() * 100
+        breadth_200 = (latest_price > ma200).sum() / ma200.count() * 100
+        
+        return {
+            'breadth_20': breadth_20,
+            'breadth_50': breadth_50,
+            'breadth_200': breadth_200,
+            'count': len(tickers) # Total tickers attempted
+        }
+    except Exception as e:
+        print(f"Error in get_market_breadth: {e}")
+        return None
+
 @st.cache_data(ttl=900)
 def get_stock_data_and_technicals(ticker):
     """
@@ -181,9 +255,9 @@ def score_option(option, current_price, portfolio_value, sector, rsi, sma_50, sm
 
     # Final Score Calculation
     final_score = ((score_return_on_capital * 0.45) + \
-                      (score_prob_safety * 0.35) + \
-                      (score_technicals * 0.15) + \
-                      (score_sizing * 0.05)) / 5 * 100
+                    (score_prob_safety * 0.35) + \
+                    (score_technicals * 0.15) + \
+                    (score_sizing * 0.05)) / 5 * 100
     
     return {
         'Expiration': option['expirationDate'], 'Strike': strike, 'Premium': premium,
@@ -220,7 +294,7 @@ def process_tickers(tickers, min_dte, max_dte, portfolio_value, status_callback=
                                           rsi, sma_50, sma_200, hv_low_1y, hv_high_1y)
                 if score_data:
                     all_options.append(score_data)
-    
+        
     if not all_options:
         return pd.DataFrame()
 
