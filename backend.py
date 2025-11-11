@@ -12,30 +12,41 @@ def get_ndx_tickers():
     """
     Fetches the list of NASDAQ-100 tickers from Wikipedia.
     """
-    try:
-        url = 'https://en.wikipedia.org/wiki/NASDAQ-100'
-        # pd.read_html needs lxml or beautifulsoup4 installed
-        tables = pd.read_html(url)
-        # Find the correct table. It's usually the 4th or 5th one.
-        # We look for one that has "Ticker" and "Company" columns.
-        ndx_table = None
-        for table in tables:
-            if 'Ticker' in table.columns and 'Company' in table.columns:
-                ndx_table = table
-                break
+    # try:
+    #     url = 'https://en.wikipedia.org/wiki/NASDAQ-100'
+    #     # pd.read_html needs lxml or beautifulsoup4 installed
+    #     tables = pd.read_html(url)
+    #     # Find the correct table. It's usually the 4th or 5th one.
+    #     # We look for one that has "Ticker" and "Company" columns.
+    #     ndx_table = None
+    #     for table in tables:
+    #         if 'Ticker' in table.columns and 'Company' in table.columns:
+    #             ndx_table = table
+    #             break
         
-        if ndx_table is None:
-            print("Could not find NASDAQ-100 ticker table on Wikipedia.")
-            return []
+    #     if ndx_table is None:
+    #         print("Could not find NASDAQ-100 ticker table on Wikipedia.")
+    #         return []
             
-        # The ticker list may contain non-standard tickers (e.g., 'BRK.B').
-        # yfinance can handle most of them.
-        tickers = ndx_table['Ticker'].tolist()
-        return tickers
-    except Exception as e:
-        print(f"Error fetching NDX tickers: {e}")
+    #     # The ticker list may contain non-standard tickers (e.g., 'BRK.B').
+    #     # yfinance can handle most of them.
+    #     tickers = ndx_table['Ticker'].tolist()
+    #     return tickers
+    # except Exception as e:
+    #     print(f"Error fetching NDX tickers: {e}")
         # Fallback list in case Wikipedia scrape fails
-        return ['AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA'] # Add more if you like
+        return [
+            'AAPL', 'ABNB', 'ADBE', 'ADI', 'ADP', 'ADSK', 'AEP', 'AMAT', 'AMD', 
+            'AMGN', 'AMZN', 'APP', 'ARM', 'ASML', 'AVGO', 'AXON', 'AZN', 'BIIB', 
+            'BKR', 'BKNG', 'BRK.B', 'CCEP', 'CDNS', 'CDW', 'CEG', 'CHTR', CMCSA', 
+            'COST', 'CPRT', 'CRWD', 'CSCO', 'CSX', 'CTAS', 'CTSH', 'DASH', 'DDOG', 
+            'DXCM', 'EA', 'EXC', 'FAST', 'FTNT', 'GFS', 'GILD', 'GOOG', 'GOOGL', 
+            'HON', 'IDXX', 'INTC', 'INTU', 'ISRG', 'KDP', 'KHC', 'KLAC', 'LIN', 
+            'LRCX', 'LULU', 'MAR', 'MCHP', 'MDLZ', 'MELI', 'META', 'MNST', 'MRVL', 
+            'MSFT', 'MSTR', 'MU', 'NFLX', 'NVDA', 'NXPI', 'ODFL', 'ON', 'ORLY', 
+            'PANW', 'PAYX', 'PCAR', 'PDD', 'PEP', 'PLTR', 'PYPL', 'QCOM', 'REGN', 
+            'ROP', 'ROST', 'SBUX', 'SHOP', 'SNPS', 'TEAM', 'TMUS', 'TRI', 'TSLA', 
+            'TSM', 'TTD', 'TTWO', 'TXN', 'VRSK', 'VRTX', 'WBD', 'WDAY', 'XEL'] # Add more if you like
 
 @st.cache_data(ttl=86400) # Cache for 1 hour
 def get_market_breadth():
